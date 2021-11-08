@@ -4,7 +4,9 @@ import (
 	"clean-arch/api"
 	"clean-arch/csv"
 	"clean-arch/infra"
+	"clean-arch/notification"
 	"clean-arch/todo"
+	"clean-arch/user"
 	"clean-arch/worker"
 	"github.com/gin-gonic/gin"
 	"log"
@@ -12,16 +14,23 @@ import (
 
 func main() {
 	db := infra.NewMemoryDB()
+	m := infra.NewFakeMailSender()
+	n := notification.NewMailNotification("todo@mail.com", m)
 	r := csv.NewCsvReader()
-	uc := todo.NewUseCase(db, r)
+	uuc := user.NewUseCase()
+	tuc := todo.NewUseCase(db, r, n)
 
-	startWorker(uc)
-	startServer(uc)
+	startWorker(tuc, uuc)
+	startServer(tuc)
 }
 
-func startWorker(uc *todo.UseCase) {
-	w := worker.NewWorker(uc)
+func startWorker(tuc *todo.UseCase, ucc *user.UseCase) {
+	w := worker.NewWorker(tuc, ucc)
 	if err := w.ImportFromFile("todos.csv"); err != nil {
+		log.Fatalln(err)
+	}
+
+	if err := w.Notify(); err != nil {
 		log.Fatalln(err)
 	}
 }

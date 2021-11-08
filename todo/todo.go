@@ -8,15 +8,17 @@ import (
 type Todo struct {
 	ID      int
 	Title   string
-	DueDate time.Time
+	User    string
+	DueDate *time.Time
 	Done    bool
 }
 
 var AlreadyDoneErr = errors.New("todo already done")
 
-func NewTodo(title string, dueDate time.Time) Todo {
+func NewTodo(title, user string, dueDate *time.Time) Todo {
 	return Todo{
 		Title:   title,
+		User:    user,
 		DueDate: dueDate,
 	}
 }

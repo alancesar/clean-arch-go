@@ -1,22 +1,31 @@
 package worker
 
 import (
+	"clean-arch/user"
+	"fmt"
 	"io"
 	"log"
 	"os"
 )
 
-type Service interface {
+type TodoService interface {
+	NotifyWhenDueDateArrives(user string) error
 	BatchInsert(reader io.Reader) error
 }
 
-type Worker struct {
-	s Service
+type UserService interface {
+	GetAllUsers() ([]user.User, error)
 }
 
-func NewWorker(service Service) *Worker {
+type Worker struct {
+	ts TodoService
+	us UserService
+}
+
+func NewWorker(todoService TodoService, userService UserService) *Worker {
 	return &Worker{
-		s: service,
+		ts: todoService,
+		us: userService,
 	}
 }
 
@@ -28,6 +37,21 @@ func (w Worker) ImportFromFile(path string) error {
 	defer func() {
 		_ = file.Close()
 	}()
-	
-	return w.s.BatchInsert(file)
+
+	return w.ts.BatchInsert(file)
+}
+
+func (w Worker) Notify() error {
+	users, err := w.us.GetAllUsers()
+	if err != nil {
+		return err
+	}
+
+	for _, u := range users {
+		if err := w.ts.NotifyWhenDueDateArrives(u.Email); err != nil {
+			fmt.Println(err)
+		}
+	}
+
+	return nil
 }

@@ -1,14 +1,18 @@
 package todo
 
 import (
+	"clean-arch/date"
 	"errors"
 	"fmt"
 	"io"
+	"time"
 )
+
+var ForbiddenErr = errors.New("forbidden")
 
 type Repository interface {
 	FindByID(id int) (Todo, error)
-	FindByDone(done bool) ([]Todo, error)
+	FindByUserAndDone(user string, done bool) ([]Todo, error)
 	Insert(Todo) (int, error)
 	Update(Todo) error
 }
@@ -17,15 +21,21 @@ type Reader interface {
 	Read(reader io.Reader) ([]Todo, error)
 }
 
-type UseCase struct {
-	repository Repository
-	reader     Reader
+type Notification interface {
+	Notify(todo Todo) error
 }
 
-func NewUseCase(repository Repository, reader Reader) *UseCase {
+type UseCase struct {
+	repository   Repository
+	reader       Reader
+	notification Notification
+}
+
+func NewUseCase(repository Repository, reader Reader, notification Notification) *UseCase {
 	return &UseCase{
-		repository: repository,
-		reader:     reader,
+		repository:   repository,
+		reader:       reader,
+		notification: notification,
 	}
 }
 
@@ -43,10 +53,12 @@ func (uc UseCase) CreateTodo(todo *Todo) error {
 	return nil
 }
 
-func (uc UseCase) MarkAsDoneByID(id int) (Todo, error) {
+func (uc UseCase) MarkAsDoneByUserAndID(user string, id int) (Todo, error) {
 	t, err := uc.repository.FindByID(id)
 	if err != nil {
 		return t, err
+	} else if t.User != user {
+		return Todo{}, ForbiddenErr
 	}
 
 	if err := t.MarkAsDone(); err != nil {
@@ -57,8 +69,26 @@ func (uc UseCase) MarkAsDoneByID(id int) (Todo, error) {
 	return t, err
 }
 
-func (uc UseCase) ListAllPending() ([]Todo, error) {
-	return uc.repository.FindByDone(false)
+func (uc UseCase) ListAllPending(user string) ([]Todo, error) {
+	return uc.repository.FindByUserAndDone(user, false)
+}
+
+func (uc UseCase) NotifyWhenDueDateArrives(user string) error {
+	todos, err := uc.repository.FindByUserAndDone(user, false)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	today := date.ParseToString(now)
+
+	for _, todo := range todos {
+		if isDueDate(today, todo.DueDate) {
+			uc.notify(todo)
+		}
+	}
+
+	return nil
 }
 
 func (uc UseCase) BatchInsert(reader io.Reader) error {
@@ -74,4 +104,18 @@ func (uc UseCase) BatchInsert(reader io.Reader) error {
 	}
 
 	return nil
+}
+
+func (uc UseCase) notify(todo Todo) {
+	if err := uc.notification.Notify(todo); err != nil {
+		fmt.Println(err)
+	}
+}
+
+func isDueDate(target string, dueDate *time.Time) bool {
+	if dueDate == nil {
+		return false
+	}
+
+	return date.ParseToString(*dueDate) == target
 }

@@ -47,11 +47,11 @@ func (mdb *MemoryDb) Update(t todo.Todo) error {
 	return errors.New("todo not found")
 }
 
-func (mdb MemoryDb) FindByDone(done bool) ([]todo.Todo, error) {
+func (mdb MemoryDb) FindByUserAndDone(user string, done bool) ([]todo.Todo, error) {
 	var output []todo.Todo
 
 	for _, curr := range mdb.todos {
-		if curr.Done == done {
+		if curr.User == user && curr.Done == done {
 			output = append(output, curr)
 		}
 	}
